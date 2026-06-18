@@ -11,7 +11,13 @@ export type Provider = {
   category: string;
   neighborhood: string;
   city: string;
+  address?: string | null;
   summary: string;
+  description?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
   services: string[];
   verified: boolean;
   rating: number;

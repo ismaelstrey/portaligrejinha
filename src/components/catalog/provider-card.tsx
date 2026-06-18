@@ -58,12 +58,20 @@ export function ProviderCard({ provider }: ProviderCardProps) {
         </div>
       </div>
 
-      <Link
-        href={`/categoria/${provider.category}`}
-        className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)] transition group-hover:gap-3"
-      >
-        Ver categoria relacionada
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href={`/prestador/${provider.slug}`}
+          className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white transition group-hover:gap-3"
+        >
+          Ver detalhes
+        </Link>
+        <Link
+          href={`/categoria/${provider.category}`}
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-soft)] px-4 py-2 text-sm font-semibold text-[var(--color-primary)] transition"
+        >
+          Ver categoria
+        </Link>
+      </div>
     </article>
   );
 }

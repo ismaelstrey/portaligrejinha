@@ -1,5 +1,11 @@
 import { OrganizationStatus, UserRole } from "@prisma/client";
 
+import {
+  categories as fallbackCategories,
+  dashboardHighlights as fallbackDashboardHighlights,
+  providers as fallbackProviders,
+  reviewQueue as fallbackReviewQueue
+} from "@/data/mock-data";
 import { prisma } from "@/server/db";
 import type { Category, Provider } from "@/types/catalog";
 import type { SubmissionItem } from "@/types/panel";
@@ -9,6 +15,12 @@ function mapProvider(data: {
   name: string;
   slug: string;
   summary: string;
+  description?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  address?: string | null;
   neighborhood: string;
   city: string;
   verified: boolean;
@@ -29,7 +41,13 @@ function mapProvider(data: {
     category: data.category.slug,
     neighborhood: data.neighborhood,
     city: data.city,
+    address: data.address,
     summary: data.summary,
+    description: data.description,
+    phone: data.phone,
+    whatsapp: data.whatsapp,
+    email: data.email,
+    website: data.website,
     services: data.services.map((service) => service.title),
     verified: data.verified,
     rating: data.rating,
@@ -70,142 +88,34 @@ function formatRelativeDate(date: Date) {
   );
 }
 
-export async function getCategories(): Promise<Category[]> {
-  const data = await prisma.category.findMany({
-    orderBy: { name: "asc" }
-  });
-
-  return data.map((item) => ({
-    slug: item.slug,
-    name: item.name,
-    description: item.description
-  }));
-}
-
-export async function getDashboardHighlights() {
-  const [publishedOrganizations, reviewOrganizations, categoryCount] = await Promise.all([
-    prisma.organization.count({
-      where: { status: OrganizationStatus.PUBLISHED }
-    }),
-    prisma.organization.count({
-      where: { status: { in: [OrganizationStatus.REVIEW, OrganizationStatus.NEEDS_CHANGES] } }
-    }),
-    prisma.category.count()
-  ]);
-
-  return [
-    {
-      label: "Cadastros publicados",
-      value: publishedOrganizations.toString(),
-      detail: "visíveis no catálogo público"
-    },
-    {
-      label: "Em revisão",
-      value: reviewOrganizations.toString(),
-      detail: "fila de curadoria ativa"
-    },
-    {
-      label: "Categorias ativas",
-      value: categoryCount.toString(),
-      detail: "base inicial do portal"
-    }
-  ];
-}
-
-export async function getFeaturedProviders() {
-  const data = await prisma.organization.findMany({
-    where: { status: OrganizationStatus.PUBLISHED },
-    include: {
-      category: true,
-      services: {
-        orderBy: { title: "asc" }
-      }
-    },
-    orderBy: [{ verified: "desc" }, { rating: "desc" }],
-    take: 4
-  });
-
-  return data.map(mapProvider);
-}
-
-export async function getExploreProviders() {
-  const data = await prisma.organization.findMany({
-    where: { status: OrganizationStatus.PUBLISHED },
-    include: {
-      category: true,
-      services: {
-        orderBy: { title: "asc" }
-      }
-    },
-    orderBy: [{ verified: "desc" }, { rating: "desc" }]
-  });
-
-  return data.map(mapProvider);
-}
-
-export async function getCategoryBySlug(slug: string) {
-  const category = await prisma.category.findUnique({
-    where: { slug }
-  });
-
-  if (!category) {
-    return null;
+function getErrorCode(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String(error.code);
   }
 
-  return {
-    slug: category.slug,
-    name: category.name,
-    description: category.description
-  };
+  return "";
 }
 
-export async function getProvidersByCategory(slug: string) {
-  const data = await prisma.organization.findMany({
-    where: {
-      status: OrganizationStatus.PUBLISHED,
-      category: { slug }
-    },
-    include: {
-      category: true,
-      services: {
-        orderBy: { title: "asc" }
-      }
-    },
-    orderBy: [{ verified: "desc" }, { rating: "desc" }]
-  });
+function isDatabaseUnavailable(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const code = getErrorCode(error);
 
-  return data.map(mapProvider);
+  return (
+    code === "P1001" ||
+    message.includes("Can't reach database server") ||
+    message.includes("Timed out fetching a new connection") ||
+    message.includes("Temporary failure in name resolution")
+  );
 }
 
-export async function getReviewQueue() {
-  const data = await prisma.organization.findMany({
-    where: {
-      status: { in: [OrganizationStatus.REVIEW, OrganizationStatus.NEEDS_CHANGES, OrganizationStatus.PUBLISHED] }
-    },
-    include: {
-      category: true
-    },
-    orderBy: [{ updatedAt: "desc" }],
-    take: 10
-  });
-
-  return data.map((item) => ({
-    id: item.id,
-    name: item.name,
-    status: formatStatus(item.status),
-    category: item.category.name,
-    city: item.city,
-    updatedAt: formatRelativeDate(item.updatedAt),
-    moderationNotes: item.moderationNotes
-  }));
+function isLocalFallbackEnabled() {
+  return process.env.NODE_ENV !== "production" || process.env.PORTAL_DATA_FALLBACK === "enabled";
 }
 
-export async function getAdminSummary() {
-  const [reviewCount, publishedCount, needsChangesCount] = await Promise.all([
-    prisma.organization.count({ where: { status: OrganizationStatus.REVIEW } }),
-    prisma.organization.count({ where: { status: OrganizationStatus.PUBLISHED } }),
-    prisma.organization.count({ where: { status: OrganizationStatus.NEEDS_CHANGES } })
-  ]);
+function getFallbackAdminSummary() {
+  const reviewCount = fallbackReviewQueue.filter((item) => item.status === "em revisão").length;
+  const publishedCount = fallbackReviewQueue.filter((item) => item.status === "publicado").length;
+  const needsChangesCount = fallbackReviewQueue.filter((item) => item.status === "precisa ajuste").length;
 
   return [
     {
@@ -221,6 +131,208 @@ export async function getAdminSummary() {
       detail: `${needsChangesCount} cadastros voltaram para correção.`
     }
   ];
+}
+
+async function readWithDatabaseFallback<T>(operation: () => Promise<T>, fallback: () => T): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isLocalFallbackEnabled() || !isDatabaseUnavailable(error)) {
+      throw error;
+    }
+
+    console.warn("[portal-data] Banco indisponível; usando dados locais de fallback.");
+    return fallback();
+  }
+}
+
+export async function getCategories(): Promise<Category[]> {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.category.findMany({
+      orderBy: { name: "asc" }
+    });
+
+    return data.map((item) => ({
+      slug: item.slug,
+      name: item.name,
+      description: item.description
+    }));
+  }, () => fallbackCategories);
+}
+
+export async function getDashboardHighlights() {
+  return readWithDatabaseFallback(async () => {
+    const [publishedOrganizations, reviewOrganizations, categoryCount] = await Promise.all([
+      prisma.organization.count({
+        where: { status: OrganizationStatus.PUBLISHED }
+      }),
+      prisma.organization.count({
+        where: { status: { in: [OrganizationStatus.REVIEW, OrganizationStatus.NEEDS_CHANGES] } }
+      }),
+      prisma.category.count()
+    ]);
+
+    return [
+      {
+        label: "Cadastros publicados",
+        value: publishedOrganizations.toString(),
+        detail: "visíveis no catálogo público"
+      },
+      {
+        label: "Em revisão",
+        value: reviewOrganizations.toString(),
+        detail: "fila de curadoria ativa"
+      },
+      {
+        label: "Categorias ativas",
+        value: categoryCount.toString(),
+        detail: "base inicial do portal"
+      }
+    ];
+  }, () => fallbackDashboardHighlights);
+}
+
+export async function getFeaturedProviders() {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findMany({
+      where: { status: OrganizationStatus.PUBLISHED },
+      include: {
+        category: true,
+        services: {
+          orderBy: { title: "asc" }
+        }
+      },
+      orderBy: [{ verified: "desc" }, { rating: "desc" }],
+      take: 4
+    });
+
+    return data.map(mapProvider);
+  }, () => fallbackProviders.slice(0, 4));
+}
+
+export async function getExploreProviders() {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findMany({
+      where: { status: OrganizationStatus.PUBLISHED },
+      include: {
+        category: true,
+        services: {
+          orderBy: { title: "asc" }
+        }
+      },
+      orderBy: [{ verified: "desc" }, { rating: "desc" }]
+    });
+
+    return data.map(mapProvider);
+  }, () => fallbackProviders);
+}
+
+export async function getCategoryBySlug(slug: string) {
+  return readWithDatabaseFallback(async () => {
+    const category = await prisma.category.findUnique({
+      where: { slug }
+    });
+
+    if (!category) {
+      return null;
+    }
+
+    return {
+      slug: category.slug,
+      name: category.name,
+      description: category.description
+    };
+  }, () => fallbackCategories.find((category) => category.slug === slug) ?? null);
+}
+
+export async function getProvidersByCategory(slug: string) {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findMany({
+      where: {
+        status: OrganizationStatus.PUBLISHED,
+        category: { slug }
+      },
+      include: {
+        category: true,
+        services: {
+          orderBy: { title: "asc" }
+        }
+      },
+      orderBy: [{ verified: "desc" }, { rating: "desc" }]
+    });
+
+    return data.map(mapProvider);
+  }, () => fallbackProviders.filter((provider) => provider.category === slug));
+}
+
+export async function getProviderBySlug(slug: string) {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findFirst({
+      where: {
+        slug,
+        status: OrganizationStatus.PUBLISHED
+      },
+      include: {
+        category: true,
+        services: {
+          orderBy: { title: "asc" }
+        }
+      }
+    });
+
+    return data ? mapProvider(data) : null;
+  }, () => fallbackProviders.find((provider) => provider.slug === slug) ?? null);
+}
+
+export async function getReviewQueue() {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findMany({
+      where: {
+        status: { in: [OrganizationStatus.REVIEW, OrganizationStatus.NEEDS_CHANGES, OrganizationStatus.PUBLISHED] }
+      },
+      include: {
+        category: true
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 10
+    });
+
+    return data.map((item) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      status: formatStatus(item.status),
+      category: item.category.name,
+      city: item.city,
+      updatedAt: formatRelativeDate(item.updatedAt),
+      moderationNotes: item.moderationNotes
+    }));
+  }, () => fallbackReviewQueue.map((item) => ({ ...item, moderationNotes: null, slug: "" })));
+}
+
+export async function getAdminSummary() {
+  return readWithDatabaseFallback(async () => {
+    const [reviewCount, publishedCount, needsChangesCount] = await Promise.all([
+      prisma.organization.count({ where: { status: OrganizationStatus.REVIEW } }),
+      prisma.organization.count({ where: { status: OrganizationStatus.PUBLISHED } }),
+      prisma.organization.count({ where: { status: OrganizationStatus.NEEDS_CHANGES } })
+    ]);
+
+    return [
+      {
+        title: "Fila de revisão",
+        detail: `${reviewCount} itens aguardando análise editorial e geográfica.`
+      },
+      {
+        title: "Publicados",
+        detail: `${publishedCount} cadastros já estão visíveis no catálogo.`
+      },
+      {
+        title: "Precisam de ajuste",
+        detail: `${needsChangesCount} cadastros voltaram para correção.`
+      }
+    ];
+  }, getFallbackAdminSummary);
 }
 
 export async function getCurrentUserSnapshot(userId: string) {
