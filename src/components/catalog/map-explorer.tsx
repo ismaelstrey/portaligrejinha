@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 
@@ -24,19 +25,47 @@ type MapExplorerProps = {
   providers: Provider[];
 };
 
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function providerMatchesSearch(provider: Provider, search: string) {
+  if (!search) {
+    return true;
+  }
+
+  const searchableText = normalizeSearch([
+    provider.name,
+    provider.summary,
+    provider.neighborhood,
+    provider.city,
+    provider.category,
+    ...provider.services
+  ].join(" "));
+
+  return searchableText.includes(search);
+}
+
 export function MapExplorer({ categories, providers }: MapExplorerProps) {
   const [activeCategory, setActiveCategory] = useState<string>("todos");
   const [activeId, setActiveId] = useState<string>(providers[0]?.id ?? "");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const filteredProviders = useMemo(() => {
-    if (activeCategory === "todos") {
-      return providers;
-    }
+    const normalizedSearch = normalizeSearch(searchTerm);
 
-    return providers.filter((provider) => provider.category === activeCategory);
-  }, [activeCategory, providers]);
+    return providers.filter((provider) => {
+      const matchesCategory = activeCategory === "todos" || provider.category === activeCategory;
 
-  const activeProvider = filteredProviders.find((provider) => provider.id === activeId) ?? filteredProviders[0] ?? providers[0];
+      return matchesCategory && providerMatchesSearch(provider, normalizedSearch);
+    });
+  }, [activeCategory, providers, searchTerm]);
+
+  const activeProvider = filteredProviders.find((provider) => provider.id === activeId) ?? filteredProviders[0];
 
   return (
     <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -47,6 +76,20 @@ export function MapExplorer({ categories, providers }: MapExplorerProps) {
           <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">
             Nesta fase, o projeto já nasce com estado compartilhado entre filtros, lista e marcadores.
           </p>
+        </div>
+
+        <div className="mb-5">
+          <label htmlFor="provider-search" className="mb-2 block text-sm font-semibold text-[var(--color-foreground)]">
+            Buscar por nome, serviço ou bairro
+          </label>
+          <input
+            id="provider-search"
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Ex.: elétrica, Centro, mercado"
+            className="w-full rounded-2xl border border-[var(--color-border)] bg-white px-4 py-3 text-sm text-[var(--color-foreground)] outline-none transition placeholder:text-[var(--color-muted)] focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary-soft)]"
+          />
         </div>
 
         <div className="mb-5 flex flex-wrap gap-2">
@@ -80,31 +123,37 @@ export function MapExplorer({ categories, providers }: MapExplorerProps) {
         </div>
 
         <div className="space-y-3">
-          {filteredProviders.map((provider) => {
-            const isActive = provider.id === activeProvider?.id;
+          {filteredProviders.length > 0 ? (
+            filteredProviders.map((provider) => {
+              const isActive = provider.id === activeProvider?.id;
 
-            return (
-              <button
-                key={provider.id}
-                type="button"
-                onClick={() => setActiveId(provider.id)}
-                className={cn(
-                  "w-full rounded-[24px] border p-4 text-left transition",
-                  isActive
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
-                    : "border-[var(--color-border)] bg-white hover:border-[var(--color-primary)]/40"
-                )}
-              >
-                <div className="mb-2 flex items-center justify-between gap-4">
-                  <h3 className="font-bold text-[var(--color-foreground)]">{provider.name}</h3>
-                  <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[var(--color-primary)]">
-                    {provider.reviewCount > 0 ? provider.rating.toFixed(1) : "novo"}
-                  </span>
-                </div>
-                <p className="text-sm text-[var(--color-muted)]">{provider.neighborhood}</p>
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  onClick={() => setActiveId(provider.id)}
+                  className={cn(
+                    "w-full rounded-[24px] border p-4 text-left transition",
+                    isActive
+                      ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
+                      : "border-[var(--color-border)] bg-white hover:border-[var(--color-primary)]/40"
+                  )}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-4">
+                    <h3 className="font-bold text-[var(--color-foreground)]">{provider.name}</h3>
+                    <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[var(--color-primary)]">
+                      {provider.reviewCount > 0 ? provider.rating.toFixed(1) : "novo"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[var(--color-muted)]">{provider.neighborhood}</p>
+                </button>
+              );
+            })
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-[var(--color-border)] bg-[var(--color-soft)] p-5 text-sm leading-6 text-[var(--color-muted)]">
+              Nenhum prestador encontrado com os filtros atuais. Tente buscar por outro serviço, bairro ou categoria.
+            </div>
+          )}
         </div>
       </aside>
 
@@ -137,6 +186,12 @@ export function MapExplorer({ categories, providers }: MapExplorerProps) {
                   </span>
                 ))}
               </div>
+              <Link
+                href={`/prestador/${activeProvider.slug}`}
+                className="mt-4 inline-flex rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                Ver detalhes do prestador
+              </Link>
             </div>
           ) : null}
         </div>
