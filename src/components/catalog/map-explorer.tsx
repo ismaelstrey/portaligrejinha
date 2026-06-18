@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 
@@ -137,6 +138,12 @@ export function MapExplorer({ categories, providers }: MapExplorerProps) {
                   </span>
                 ))}
               </div>
+              <Link
+                href={`/prestador/${activeProvider.slug}`}
+                className="mt-4 inline-flex rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+              >
+                Ver detalhes do prestador
+              </Link>
             </div>
           ) : null}
         </div>
