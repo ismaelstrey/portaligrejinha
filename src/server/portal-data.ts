@@ -15,6 +15,12 @@ function mapProvider(data: {
   name: string;
   slug: string;
   summary: string;
+  description?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  website?: string | null;
+  address?: string | null;
   neighborhood: string;
   city: string;
   verified: boolean;
@@ -35,7 +41,13 @@ function mapProvider(data: {
     category: data.category.slug,
     neighborhood: data.neighborhood,
     city: data.city,
+    address: data.address,
     summary: data.summary,
+    description: data.description,
+    phone: data.phone,
+    whatsapp: data.whatsapp,
+    email: data.email,
+    website: data.website,
     services: data.services.map((service) => service.title),
     verified: data.verified,
     rating: data.rating,
@@ -251,6 +263,25 @@ export async function getProvidersByCategory(slug: string) {
 
     return data.map(mapProvider);
   }, () => fallbackProviders.filter((provider) => provider.category === slug));
+}
+
+export async function getProviderBySlug(slug: string) {
+  return readWithDatabaseFallback(async () => {
+    const data = await prisma.organization.findFirst({
+      where: {
+        slug,
+        status: OrganizationStatus.PUBLISHED
+      },
+      include: {
+        category: true,
+        services: {
+          orderBy: { title: "asc" }
+        }
+      }
+    });
+
+    return data ? mapProvider(data) : null;
+  }, () => fallbackProviders.find((provider) => provider.slug === slug) ?? null);
 }
 
 export async function getReviewQueue() {
