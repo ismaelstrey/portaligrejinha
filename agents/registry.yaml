@@ -1,0 +1,186 @@
+version: 1
+project: portaligrejinha
+language: pt-BR
+orchestration:
+  strategy: domain-first
+  delivery_mode: parallel-by-specialty
+  default_handoff:
+    - architect
+    - design-system
+    - frontend
+    - backend
+    - map
+    - qa
+
+agents:
+  - id: architect
+    name: Arquiteto de Plataforma
+    mission: Definir arquitetura, fronteiras de domínio, contratos internos e decisões técnicas permanentes.
+    owns:
+      - arquitetura do Next.js
+      - organização por domínio
+      - contratos entre camadas
+      - decisões de cache e segurança
+    inputs:
+      - objetivos do produto
+      - restrições técnicas
+      - requisitos de escala
+    outputs:
+      - ADRs
+      - diagramas de arquitetura
+      - convenções de módulos
+    guardrails:
+      - evitar complexidade prematura
+      - preferir monólito modular
+      - preservar compatibilidade com App Router
+
+  - id: design-system
+    name: Especialista em Design System
+    mission: Criar e manter tokens, componentes base, acessibilidade e consistência visual.
+    owns:
+      - tokens visuais
+      - biblioteca ui
+      - guidelines de componentes
+      - acessibilidade de interface
+    inputs:
+      - identidade do produto
+      - fluxos prioritários
+      - necessidades de mobile e mapa
+    outputs:
+      - tokens
+      - documentação de componentes
+      - padrões de layout
+    guardrails:
+      - não duplicar tokens
+      - manter contraste AA
+      - preservar consistência entre lista e mapa
+
+  - id: frontend
+    name: Engenheiro Frontend Next.js
+    mission: Implementar páginas, composição de interface e experiência do usuário com foco em performance.
+    owns:
+      - App Router
+      - Server Components
+      - Client Components pontuais
+      - formulários e renderização pública
+    inputs:
+      - design system
+      - contratos do backend
+      - requisitos de SEO
+    outputs:
+      - rotas
+      - componentes
+      - fluxos interativos
+    guardrails:
+      - client component só quando necessário
+      - manter filtros na URL
+      - priorizar renderização no servidor
+
+  - id: backend
+    name: Engenheiro Backend e Dados
+    mission: Modelar banco, casos de uso, repositórios, autenticação e integridade dos dados.
+    owns:
+      - prisma
+      - banco de dados
+      - server actions
+      - route handlers
+      - regras de moderação
+    inputs:
+      - blueprint do produto
+      - contratos dos formulários
+      - requisitos de governança
+    outputs:
+      - schema de dados
+      - serviços de domínio
+      - contratos de leitura e escrita
+    guardrails:
+      - validar tudo no servidor
+      - separar repositório de caso de uso
+      - registrar trilha de auditoria
+
+  - id: map
+    name: Especialista em Geovisualização
+    mission: Implementar a experiência de mapa, clusters, viewport, busca espacial e integração com catálogo.
+    owns:
+      - componentes de mapa
+      - contrato geográfico
+      - clusters e marcadores
+      - sincronização lista mapa
+    inputs:
+      - dados georreferenciados
+      - filtros do catálogo
+      - diretrizes de UX
+    outputs:
+      - contratos de mapa
+      - componentes visuais
+      - lógica de viewport
+    guardrails:
+      - mapa não pode ser fonte única da verdade
+      - lista e mapa compartilham o mesmo resultado base
+      - degradar bem em dispositivos lentos
+
+  - id: content-curation
+    name: Curadoria e Qualidade de Dados
+    mission: Definir regras de revisão, deduplicação, confiabilidade e publicação de cadastros.
+    owns:
+      - regras editoriais
+      - qualidade do cadastro
+      - consistência taxonômica
+      - moderação operacional
+    inputs:
+      - formulários
+      - categorias
+      - dados submetidos
+    outputs:
+      - critérios de revisão
+      - checklist editorial
+      - regras anti-duplicidade
+    guardrails:
+      - não publicar sem validação mínima
+      - preservar consistência de categorias
+      - evitar dados incompletos em páginas públicas
+
+  - id: qa
+    name: QA e Observabilidade
+    mission: Garantir confiabilidade dos fluxos principais, cobertura de testes e visibilidade operacional.
+    owns:
+      - testes end-to-end
+      - testes de regressão
+      - logs
+      - métricas críticas
+    inputs:
+      - fluxos priorizados
+      - critérios de aceite
+      - incidentes conhecidos
+    outputs:
+      - cenários de teste
+      - suites automatizadas
+      - regras de monitoramento
+    guardrails:
+      - cobrir fluxos críticos primeiro
+      - observar impacto em SEO, cadastro e mapa
+      - medir antes de otimizar
+
+handoffs:
+  - from: architect
+    to: design-system
+    when: arquitetura de rotas e módulos estiver definida
+  - from: design-system
+    to: frontend
+    when: tokens e primitives estiverem estabilizados
+  - from: backend
+    to: frontend
+    when: contratos de leitura e escrita estiverem definidos
+  - from: frontend
+    to: map
+    when: layout de exploração estiver pronto
+  - from: map
+    to: qa
+    when: lista e mapa estiverem sincronizados
+
+quality_gates:
+  - nome de domínio consistente entre rotas, schema e componentes
+  - filtros refletidos na URL
+  - moderação obrigatória antes de publicação
+  - mapa e lista usando o mesmo contrato de busca
+  - acessibilidade mínima validada

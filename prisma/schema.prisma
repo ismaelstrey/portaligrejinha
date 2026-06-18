@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  REVIEWER
+  PROVIDER
+}
+
+enum OrganizationStatus {
+  DRAFT
+  REVIEW
+  NEEDS_CHANGES
+  PUBLISHED
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  name                  String
+  email                 String         @unique
+  passwordHash          String
+  role                  UserRole       @default(PROVIDER)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  organizations         Organization[] @relation("OwnedOrganizations")
+  reviewedOrganizations Organization[] @relation("ReviewedOrganizations")
+}
+
+model Category {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  name          String
+  description   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizations Organization[]
+}
+
+model Organization {
+  id                  String             @id @default(cuid())
+  name                String
+  slug                String             @unique
+  summary             String
+  description         String?
+  phone               String?
+  whatsapp            String?
+  email               String?
+  website             String?
+  neighborhood        String
+  city                String
+  address             String?
+  latitude            Float
+  longitude           Float
+  mapX                Int
+  mapY                Int
+  responseTimeMinutes Int                @default(60)
+  verified            Boolean            @default(false)
+  rating              Float              @default(0)
+  reviewCount         Int                @default(0)
+  status              OrganizationStatus @default(REVIEW)
+  moderationNotes     String?
+  reviewedAt          DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  categoryId          String
+  ownerId             String?
+  reviewedById        String?
+  category            Category           @relation(fields: [categoryId], references: [id])
+  owner               User?              @relation("OwnedOrganizations", fields: [ownerId], references: [id])
+  reviewedBy          User?              @relation("ReviewedOrganizations", fields: [reviewedById], references: [id])
+  services            ServiceOffering[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([city, neighborhood])
+}
+
+model ServiceOffering {
+  id             String       @id @default(cuid())
+  title          String
+  description    String
+  priceLabel     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
