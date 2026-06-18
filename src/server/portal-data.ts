@@ -76,25 +76,66 @@ function formatRelativeDate(date: Date) {
   );
 }
 
+function getErrorCode(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String(error.code);
+  }
+
+  return "";
+}
+
 function isDatabaseUnavailable(error: unknown) {
-  return error instanceof Error && (
-    error.message.includes("Can't reach database server") ||
-    error.message.includes("Timed out fetching a new connection") ||
-    error.message.includes("Temporary failure in name resolution")
+  const message = error instanceof Error ? error.message : "";
+  const code = getErrorCode(error);
+
+  return (
+    code === "P1001" ||
+    message.includes("Can't reach database server") ||
+    message.includes("Timed out fetching a new connection") ||
+    message.includes("Temporary failure in name resolution")
   );
 }
 
-function withDatabaseFallback<T>(error: unknown, fallback: T): T {
-  if (!isDatabaseUnavailable(error)) {
-    throw error;
-  }
+function isLocalFallbackEnabled() {
+  return process.env.NODE_ENV !== "production" || process.env.PORTAL_DATA_FALLBACK === "enabled";
+}
 
-  console.warn("[portal-data] Banco indisponível; usando dados locais de fallback.");
-  return fallback;
+function getFallbackAdminSummary() {
+  const reviewCount = fallbackReviewQueue.filter((item) => item.status === "em revisão").length;
+  const publishedCount = fallbackReviewQueue.filter((item) => item.status === "publicado").length;
+  const needsChangesCount = fallbackReviewQueue.filter((item) => item.status === "precisa ajuste").length;
+
+  return [
+    {
+      title: "Fila de revisão",
+      detail: `${reviewCount} itens aguardando análise editorial e geográfica.`
+    },
+    {
+      title: "Publicados",
+      detail: `${publishedCount} cadastros já estão visíveis no catálogo.`
+    },
+    {
+      title: "Precisam de ajuste",
+      detail: `${needsChangesCount} cadastros voltaram para correção.`
+    }
+  ];
+}
+
+async function readWithDatabaseFallback<T>(operation: () => Promise<T>, fallback: () => T): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isLocalFallbackEnabled() || !isDatabaseUnavailable(error)) {
+      throw error;
+    }
+
+    console.warn("[portal-data] Banco indisponível; usando dados locais de fallback.");
+    return fallback();
+  }
 }
 
 export async function getCategories(): Promise<Category[]> {
-  try {
+  return readWithDatabaseFallback(async () => {
     const data = await prisma.category.findMany({
       orderBy: { name: "asc" }
     });
@@ -104,13 +145,11 @@ export async function getCategories(): Promise<Category[]> {
       name: item.name,
       description: item.description
     }));
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackCategories);
-  }
+  }, () => fallbackCategories);
 }
 
 export async function getDashboardHighlights() {
-  try {
+  return readWithDatabaseFallback(async () => {
     const [publishedOrganizations, reviewOrganizations, categoryCount] = await Promise.all([
       prisma.organization.count({
         where: { status: OrganizationStatus.PUBLISHED }
@@ -138,13 +177,11 @@ export async function getDashboardHighlights() {
         detail: "base inicial do portal"
       }
     ];
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackDashboardHighlights);
-  }
+  }, () => fallbackDashboardHighlights);
 }
 
 export async function getFeaturedProviders() {
-  try {
+  return readWithDatabaseFallback(async () => {
     const data = await prisma.organization.findMany({
       where: { status: OrganizationStatus.PUBLISHED },
       include: {
@@ -158,13 +195,11 @@ export async function getFeaturedProviders() {
     });
 
     return data.map(mapProvider);
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackProviders.slice(0, 4));
-  }
+  }, () => fallbackProviders.slice(0, 4));
 }
 
 export async function getExploreProviders() {
-  try {
+  return readWithDatabaseFallback(async () => {
     const data = await prisma.organization.findMany({
       where: { status: OrganizationStatus.PUBLISHED },
       include: {
@@ -177,13 +212,11 @@ export async function getExploreProviders() {
     });
 
     return data.map(mapProvider);
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackProviders);
-  }
+  }, () => fallbackProviders);
 }
 
 export async function getCategoryBySlug(slug: string) {
-  try {
+  return readWithDatabaseFallback(async () => {
     const category = await prisma.category.findUnique({
       where: { slug }
     });
@@ -197,13 +230,11 @@ export async function getCategoryBySlug(slug: string) {
       name: category.name,
       description: category.description
     };
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackCategories.find((category) => category.slug === slug) ?? null);
-  }
+  }, () => fallbackCategories.find((category) => category.slug === slug) ?? null);
 }
 
 export async function getProvidersByCategory(slug: string) {
-  try {
+  return readWithDatabaseFallback(async () => {
     const data = await prisma.organization.findMany({
       where: {
         status: OrganizationStatus.PUBLISHED,
@@ -219,13 +250,11 @@ export async function getProvidersByCategory(slug: string) {
     });
 
     return data.map(mapProvider);
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackProviders.filter((provider) => provider.category === slug));
-  }
+  }, () => fallbackProviders.filter((provider) => provider.category === slug));
 }
 
 export async function getReviewQueue() {
-  try {
+  return readWithDatabaseFallback(async () => {
     const data = await prisma.organization.findMany({
       where: {
         status: { in: [OrganizationStatus.REVIEW, OrganizationStatus.NEEDS_CHANGES, OrganizationStatus.PUBLISHED] }
@@ -246,13 +275,11 @@ export async function getReviewQueue() {
       updatedAt: formatRelativeDate(item.updatedAt),
       moderationNotes: item.moderationNotes
     }));
-  } catch (error) {
-    return withDatabaseFallback(error, fallbackReviewQueue.map((item) => ({ ...item, moderationNotes: null })));
-  }
+  }, () => fallbackReviewQueue.map((item) => ({ ...item, moderationNotes: null })));
 }
 
 export async function getAdminSummary() {
-  try {
+  return readWithDatabaseFallback(async () => {
     const [reviewCount, publishedCount, needsChangesCount] = await Promise.all([
       prisma.organization.count({ where: { status: OrganizationStatus.REVIEW } }),
       prisma.organization.count({ where: { status: OrganizationStatus.PUBLISHED } }),
@@ -273,22 +300,7 @@ export async function getAdminSummary() {
         detail: `${needsChangesCount} cadastros voltaram para correção.`
       }
     ];
-  } catch (error) {
-    return withDatabaseFallback(error, [
-      {
-        title: "Fila de revisão",
-        detail: `${fallbackReviewQueue.filter((item) => item.status === "em revisão").length} itens aguardando análise editorial e geográfica.`
-      },
-      {
-        title: "Publicados",
-        detail: `${fallbackReviewQueue.filter((item) => item.status === "publicado").length} cadastros já estão visíveis no catálogo.`
-      },
-      {
-        title: "Precisam de ajuste",
-        detail: `${fallbackReviewQueue.filter((item) => item.status === "precisa ajuste").length} cadastros voltaram para correção.`
-      }
-    ]);
-  }
+  }, getFallbackAdminSummary);
 }
 
 export async function getCurrentUserSnapshot(userId: string) {
