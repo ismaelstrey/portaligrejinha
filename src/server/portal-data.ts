@@ -300,13 +300,14 @@ export async function getReviewQueue() {
     return data.map((item) => ({
       id: item.id,
       name: item.name,
+      slug: item.slug,
       status: formatStatus(item.status),
       category: item.category.name,
       city: item.city,
       updatedAt: formatRelativeDate(item.updatedAt),
       moderationNotes: item.moderationNotes
     }));
-  }, () => fallbackReviewQueue.map((item) => ({ ...item, moderationNotes: null })));
+  }, () => fallbackReviewQueue.map((item) => ({ ...item, moderationNotes: null, slug: "" })));
 }
 
 export async function getAdminSummary() {

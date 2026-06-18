@@ -34,13 +34,13 @@ export default async function AdminPage() {
             const Icon = adminIcons[index] ?? Eye;
 
             return (
-            <article key={title} className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-soft)] p-5">
-              <div className="mb-4 inline-flex rounded-2xl bg-white p-3 text-[var(--color-primary)]">
-                <Icon className="size-5" />
-              </div>
-              <h2 className="text-lg font-bold tracking-tight text-[var(--color-foreground)]">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{detail}</p>
-            </article>
+              <article key={title} className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-soft)] p-5">
+                <div className="mb-4 inline-flex rounded-2xl bg-white p-3 text-[var(--color-primary)]">
+                  <Icon className="size-5" />
+                </div>
+                <h2 className="text-lg font-bold tracking-tight text-[var(--color-foreground)]">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{detail}</p>
+              </article>
             );
           })}
         </div>

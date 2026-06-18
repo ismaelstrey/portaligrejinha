@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/access";
 import { prisma } from "@/server/db";
 
 export async function moderateOrganizationAction(formData: FormData) {
-  await requireRole("/admin", ["ADMIN", "REVIEWER"]);
+  const session = await requireRole("/admin", ["ADMIN", "REVIEWER"]);
 
   const organizationId = String(formData.get("organizationId") ?? "");
   const intent = String(formData.get("intent") ?? "");
@@ -31,6 +31,7 @@ export async function moderateOrganizationAction(formData: FormData) {
     data: {
       status: intent === "publish" ? OrganizationStatus.PUBLISHED : OrganizationStatus.NEEDS_CHANGES,
       moderationNotes: moderationNotes || null,
+      reviewedById: session.user.id,
       reviewedAt: new Date()
     }
   });
@@ -40,4 +41,5 @@ export async function moderateOrganizationAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/painel");
   revalidatePath(`/categoria/${organization.category.slug}`);
+  revalidatePath(`/prestador/${organization.slug}`);
 }
